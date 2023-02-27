@@ -7,6 +7,12 @@ from sklearn.mixture import BayesianGaussianMixture
 def openDataPleomorphism (DictionaryIDX,listPaths,y_train,FolderOutputZernike,FolderOutputDicImg,FolderCSV):
     X_train = listPaths
     AllLabels = []
+    AllLabels_nuclei_size=[]
+    AllLabels_anisonucleosis=[]
+    AllLabels_nucleoli_size=[]
+    AllLabels_chromatin_density=[]
+    AllLabels_membrane_thickness=[]
+    AllLabels_nuclei_contour=[]
     AllLabelsSublabels = []
     AllZernike = []
     AllDicNucleus = []
@@ -45,12 +51,28 @@ def openDataPleomorphism (DictionaryIDX,listPaths,y_train,FolderOutputZernike,Fo
         AllZernike.extend(ZernikeCoefficients)
         AllDicNucleus.extend(DictionaryOfTheImage)
         Label = y_train.loc[imgD]
-        ArrayOfLabels = np.matlib.repmat(Label, len(ZernikeCoefficients), 1)
-        ArrayOfLabels2 = np.matlib.repmat(np.hstack((Label,OutDiag)), len(ZernikeCoefficients), 1)
+        ArrayOfLabels = np.matlib.repmat(Label, len(ZernikeCoefficients),1)[:,0]
+        ArrayOfLabels2 = np.matlib.repmat(np.hstack((Label,OutDiag)), len(ZernikeCoefficients),1)
+        ArrayOfLabels_nuclei_size = np.matlib.repmat(OutDiag[0], len(ZernikeCoefficients),1)[:,0]
+        ArrayOfLabels_anisonucleosis = np.matlib.repmat(OutDiag[1], len(ZernikeCoefficients),1)[:,0]
+        ArrayOfLabels_nucleoli_size = np.matlib.repmat(OutDiag[2], len(ZernikeCoefficients),1)[:,0]
+        ArrayOfLabels_chromatin_density = np.matlib.repmat(OutDiag[3], len(ZernikeCoefficients),1)[:,0]
+        ArrayOfLabels_membrane_thickness = np.matlib.repmat(OutDiag[4], len(ZernikeCoefficients),1)[:,0]
+        ArrayOfLabels_nuclei_contour = np.matlib.repmat(OutDiag[5], len(ZernikeCoefficients),1)[:,0]
+
         AllLabels.extend(ArrayOfLabels)
+        AllLabels_anisonucleosis.extend(ArrayOfLabels_anisonucleosis)
+        AllLabels_membrane_thickness.extend(ArrayOfLabels_membrane_thickness)
+        AllLabels_nucleoli_size.extend(ArrayOfLabels_nucleoli_size)
+        AllLabels_nuclei_contour.extend(ArrayOfLabels_nuclei_contour)
+        AllLabels_chromatin_density.extend(ArrayOfLabels_chromatin_density)
+        AllLabels_nuclei_size.extend(ArrayOfLabels_nuclei_size)
+
         AllLabelsSublabels.extend(ArrayOfLabels2)
+    dfAllLabels = pd.DataFrame({'NPofImage':AllLabels,'anisonucleosis': AllLabels_anisonucleosis, 'membrane_thickness': AllLabels_membrane_thickness,'nucleoli_size':AllLabels_nucleoli_size,
+                       'nuclei_contour':AllLabels_nuclei_contour,'chromatin_density':AllLabels_chromatin_density,'nuclei_size':AllLabels_nuclei_size})
     AllZernike = np.array(AllZernike)
-    return AllZernike, AllDicNucleus, AllLabels, df
+    return AllZernike, AllDicNucleus, AllLabels, df,dfAllLabels
 
 def GenerateHistogramsPN (listPaths,y_train,FolderOutputZernike,FolderOutputDicImg,FolderCSV,Mod_dpgmm):
     X_train = listPaths

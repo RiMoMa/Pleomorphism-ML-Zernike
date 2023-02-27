@@ -1,6 +1,5 @@
 import glob
 import numpy as np
-
 import os
 import matplotlib.pyplot as plt
 from skimage.measure import label, regionprops, regionprops_table
@@ -16,34 +15,34 @@ from OpenDataPleomorphism import  openDataPleomorphism
 from OpenDataPleomorphism import  GenerateHistogramsPN
 from sklearn.model_selection import KFold
 from sklearn.model_selection import StratifiedKFold
-
 from sklearn.manifold import TSNE
-### Folders De mask e Imagenes
 
-#Estos son los paths del dataset y de las caracteristicas de zernike y nucleos extraidos
+### Paths for folder of masks and dataset
 DatasetDir ='/home/ricardo/Documents/Doctorado/DatasetMedNorm/'
 MaskDir =  '/home/ricardo/SegmentacionMetodo/'
-Clases = ['clase_1/','clase_2/','clase_3/']
-FolderOutputZernike = '/home/ricardo/Documents/Doctorado/Pleomorphism/ZernikePython/'
-FolderOutputDicImg = '/home/ricardo/Documents/Doctorado/Pleomorphism/DicPython/'
-FolderCSV = '/home/ricardo/Documents/Doctorado/Pleomorphism/Dataset/CSVx40Atypia/'
+Clases = ['clase_1/','clase_2/','clase_3/']## Folder of each class
 
-### Hacer el KFOLD por pacientes
+### Output Folders
+FolderOutputZernike = '/home/ricardo/Documents/Doctorado/Pleomorphism/ZernikePython/' # folder with the zernike features
+FolderOutputDicImg = '/home/ricardo/Documents/Doctorado/Pleomorphism/DicPython/' #folder with the nuclei per image
+FolderCSV = '/home/ricardo/Documents/Doctorado/Pleomorphism/Dataset/CSVx40Atypia/' # folder with dataset information
 
+### Initialize Variables
 AllLabels=[]
 AllLabelsSublabels=[]
 AllZernike = []
 AllDicNucleus = []
-### SLIPT DATASET USING A K FOLD
+
+### SLIPT DATASET USING A K FOLD for testing
 KFold = 5
 
 # SET IMAGES FOR DICTIONARY BUILD
-ListImgNames=[] # lista de los paths de todas las imagenes
-AllLabels = [] # Labels de la lista de imagenes
+ListImgNames=[] #List with all images paths
+AllLabels = [] #List with labels or classification
 
-#### Generar la lista de los paths de las imagenes##########
+#### Build Lists of paths ##########
 for clase in range(3):
-    ### seleccionar Imagenes
+
     DirComplete = DatasetDir + Clases[clase] + '*'
     ImgFiles = glob.glob(DirComplete)
     ### solo para debug uso menos imagenes
@@ -54,7 +53,9 @@ for clase in range(3):
     AllLabels.extend(Labels[0])
 
 ###################
-########## DATAFRAME DE LA LISTA GENERADA
+
+
+########## DATAFRAME
 DF_listImages = pd.DataFrame({'ruta':ListImgNames})
 DF_listImages.insert(1,column='gradoNP',value=AllLabels)
 ##################
@@ -65,12 +66,12 @@ DF_listImages.insert(1,column='gradoNP',value=AllLabels)
 #added some parameters
 kf = StratifiedKFold(n_splits = 5)
 Nimg_class = 20 #number of images for class used to dictionary build
-NumberClustersD = 10
+NumberClustersD = 10 #Number of clusters per dictionary and sublabel
 
 
 
 for train_index, test_index in kf.split(ListImgNames, AllLabels):
-    print("New Fold")
+    # Extract Path of train and test images
     X_train, X_test = DF_listImages['ruta'][train_index], DF_listImages['ruta'][test_index]
     y_train, y_test = DF_listImages['gradoNP'][train_index], DF_listImages['gradoNP'][test_index]
 
@@ -80,21 +81,41 @@ for train_index, test_index in kf.split(ListImgNames, AllLabels):
     DictionaryIDX = []
     for selC in np.unique(y_train):
         idxSEL = np.array(y_trainAux.loc[selC]['index'].to_list())
-        idxNimgs = np.matlib.random.permutation(Nimg_class)
+        idxNimgs = np.matlib.random.permutation(len(idxSEL))#Nimg_class)
         idxSEL = idxSEL[idxNimgs]
         DictionaryIDX.extend(idxSEL)
-        print(idxSEL)
+        #print(idxSEL)
     ## open image and build the dictionary
-    AllZernike, AllDicNucleus, AllLabels,DFDictionary = openDataPleomorphism(DictionaryIDX, X_train, y_train, FolderOutputZernike, FolderOutputDicImg, FolderCSV)
-    Mod_dpgmm = BayesianGaussianMixture(n_components=NumberClustersD)
-    Mod_dpgmm.fit(AllZernike)
+    AllZernike, AllDicNucleus, AllLabels,DFDictionary,DF_allLabels = openDataPleomorphism(DictionaryIDX, X_train, y_train, FolderOutputZernike, FolderOutputDicImg, FolderCSV)
+
+    #Dictionary per class construction
+
+    idxNp1=DF_allLabels[DF_allLabels['NPofImage'] == '2'].index.values
+    X1 = DF_allLabels[DF_allLabels['NPofImage'] == '2'][DF_allLabels['nuclei_size']==1].index.values
+    X2 = DF_allLabels[DF_allLabels['NPofImage'] == '2'][DF_allLabels['nuclei_size']== 2].index.values
+c    XZ2 = AllZernike[X2, :]
+    X = np.concatenate((XZ1,XZ2))
+
+    Mod_dpgmm = BayesianGaussianMixture(n_components=NumberClustersD,weight_concentration_prior_type='dirichlet_process')
+    Mod_dpgmm2 = BayesianGaussianMixture(n_components=NumberClustersD,
+                                         weight_concentration_prior_type='dirichlet_process')
+    Mod_dpgmm1 = BayesianGaussianMixture(n_components=NumberClustersD,
+                                         weight_concentration_prior_type='dirichlet_process')
+    Mod_dpgmm2.fit(XZ2)
+    Mod_dpgmm1.fit(XZ1)
+    from sklearn.manifold import TSNE
+
+    X_embedded = TSNE(n_components=2, metric='cosine', perplexity=10).fit_transform(X)
+
+
+
+
     ##### GENERATE Training Histograms
     Xtrain_TrainHistograms = GenerateHistogramsPN(X_train, y_train, FolderOutputZernike, FolderOutputDicImg,
                                          FolderCSV, Mod_dpgmm)
     Xtest_TrainHistograms = GenerateHistogramsPN(X_test, y_test, FolderOutputZernike, FolderOutputDicImg,
                                          FolderCSV, Mod_dpgmm)
 
-print('aqui voy')
 # TRAIN A CLASSIFIER
 
 # OBTAIN METRICS
@@ -169,14 +190,11 @@ from sklearn.mixture import BayesianGaussianMixture
 #idx_d = DF_AllFeatures['anisonucleosis']==2
 #X = np.array(AllZernike)[idx_d,:]
 
-Mod_dpgmm = BayesianGaussianMixture(n_components=10)
-Mod_dpgmm.fit(X)
 
 #Y_ = Mod_dpgmm.predict(X)
 
 #idx_d = DF_AllFeatures['anisonucleosis']==3
 #X2 = np.array(AllZernike)[idx_d,:]
-Y_ = Mod_dpgmm.predict(X)
 #Y_2 = Y_>0.99
 #Y_3 = Y_2.any(axis=1)
 #Y_3 = np.logical_not(Y_3)
@@ -393,12 +411,17 @@ image_centers_area_size = plot_size - 2 * offset
 tsne_plot = 255 * np.ones((plot_size, plot_size, 3), np.uint8)
 from tqdm import tqdm
 # now we'll put a small copy of every image to its corresponding T-SNE coordinate
-labels=Y_
-for image_path, label, x, y in tqdm(
-        zip(AllDicNucleus, labels, tx, ty),
+
+AllDicNucleusIDXS = X2
+txA=tx[len(X1)::]
+tyA=ty[len(X1)::]
+labels = Mod_dpgmm2.predict(XZ2)
+for image_pathIDX, label, x, y in tqdm(
+        zip(AllDicNucleusIDXS, labels, txA, tyA),
         desc='Building the T-SNE plot',
-        total=len(AllDicNucleus)
+        total=len(tx)
 ):
+    image_path = AllDicNucleus[image_pathIDX]
     image = image_path
 
     # scale the image to put it to the plot
@@ -412,7 +435,7 @@ for image_path, label, x, y in tqdm(
 
     # put the image to its t-SNE coordinates using numpy sub-array indices
     tsne_plot[tl_y:br_y, tl_x:br_x, :] = image
-cv2.imwrite('allNP3ansinocleosis43.png',tsne_plot)#
+cv2.imwrite('allNP1size2.png',tsne_plot)#
 #cv2.imshow('t-SNE', tsne_plot)
 #cv2.waitKey()
 print('mejor_????')
